@@ -1,47 +1,68 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AI Bot</title>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AI Tutor - ChatGPT Clone</title>
+  <link rel="stylesheet" href="style.css" />
 
-    <link rel="stylesheet" href="style.css">
+  <!-- Markdown parser -->
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  <!-- HTML sanitizer -->
+  <script src="https://cdn.jsdelivr.net/npm/dompurify@3.1.6/dist/purify.min.js"></script>
+  <!-- Code highlighting -->
+  <link
+    rel="stylesheet"
+    href="https://cdn.jsdelivr.net/npm/highlight.js@11.9.0/styles/github-dark.min.css"
+  />
+  <script src="https://cdn.jsdelivr.net/npm/highlight.js@11.9.0/lib/common.min.js"></script>
 </head>
 
 <body>
-
-    <!-- LEFT SIDEBAR -->
-    <div id="sidebar">
-        <button id="new-chat-btn">+ New Chat</button>
-        <div id="session-list"></div>
+  <!-- SIDEBAR -->
+  <aside id="sidebar">
+    <div class="sidebar-top">
+      <div class="app-title">AI Tutor</div>
+      <button id="new-chat-btn" class="btn btn-primary">+ New Chat</button>
     </div>
 
-    <!-- MAIN CHAT AREA -->
-    <div id="main">
-        
-        <!-- Simple Top Bar -->
-        <div id="topbar">
-            <h2 id="active-session-title">Chat</h2>
-        </div>
-
-        <!-- Chat Container -->
-        <div id="chat-container">
-            <div id="messages"></div>
-
-            <div id="typing-indicator" class="typing-indicator">
-                <span class="typing-dot"></span>
-                <span class="typing-dot"></span>
-                <span class="typing-dot"></span>
-            </div>
-        </div>
-
-        <!-- INPUT BAR -->
-        <div id="input-bar">
-            <input id="user-input" placeholder="Type your message..." autocomplete="off">
-            <button id="send-btn">Send</button>
-        </div>
+    <div id="session-list" class="session-list">
+      <!-- Sessions rendered by JS -->
     </div>
+  </aside>
 
-    <script src="script.js"></script>
+  <!-- MAIN AREA -->
+  <main id="main">
+    <!-- Top bar -->
+    <header id="topbar">
+      <h2 id="active-session-title">New Chat</h2>
+    </header>
+
+    <!-- Chat area -->
+    <section id="chat-container">
+      <div id="messages" class="messages"></div>
+
+      <div id="typing-indicator" class="typing-indicator">
+        <span class="typing-dot"></span>
+        <span class="typing-dot"></span>
+        <span class="typing-dot"></span>
+      </div>
+    </section>
+
+    <!-- Input bar -->
+    <footer id="input-bar">
+      <div class="input-inner">
+        <textarea
+          id="user-input"
+          rows="1"
+          placeholder="Type your message..."
+        ></textarea>
+        <button id="send-btn" class="btn btn-send">Send</button>
+      </div>
+      <div class="input-hint">Press Enter to send • Shift + Enter for new line</div>
+    </footer>
+  </main>
+
+  <script src="script.js"></script>
 </body>
 </html>

@@ -1,5 +1,6 @@
 console.log("SCRIPT LOADED ✔");
 
+// ===== DOM ELEMENTS =====
 const sessionList = document.getElementById("session-list");
 const newChatBtn = document.getElementById("new-chat-btn");
 const messagesDiv = document.getElementById("messages");
@@ -8,231 +9,372 @@ const sendBtn = document.getElementById("send-btn");
 const typingIndicator = document.getElementById("typing-indicator");
 const titleEl = document.getElementById("active-session-title");
 
-let sessionId = localStorage.getItem("sessionId");
+// Backend base URL
+const API_BASE = "http://localhost:8000";
 
-/* ----------------------- INITIAL LOAD ----------------------- */
-window.onload = async () => {
-    if (!sessionId) {
-        await createNewSession();
-    } else {
-        await loadSessions();
-        await loadChatHistory(sessionId);
+let activeSessionId = localStorage.getItem("activeSessionId") || null;
+
+// ===== INIT =====
+window.addEventListener("load", async () => {
+  await loadSessions();
+
+  if (activeSessionId) {
+    await loadChatHistory(activeSessionId);
+  } else {
+    await createNewSession();
+  }
+});
+
+// ===== MARKDOWN RENDERING =====
+function renderMarkdown(text) {
+  if (!text) return "";
+
+  // Configure marked
+  marked.setOptions({
+    breaks: true,
+    gfm: true,
+    highlight: function (code, lang) {
+      try {
+        if (lang && hljs.getLanguage(lang)) {
+          return hljs.highlight(code, { language: lang }).value;
+        }
+      } catch (e) {
+        console.error("Highlight error:", e);
+      }
+      return hljs.highlightAuto(code).value;
     }
-};
+  });
 
-/* ----------------------- CREATE NEW SESSION ----------------------- */
+  const rawHtml = marked.parse(text);
+  const cleanHtml = DOMPurify.sanitize(rawHtml);
+  return cleanHtml;
+}
+
+// ===== SCROLL HELPERS =====
+function scrollToBottom() {
+  messagesDiv.scrollTop = messagesDiv.scrollHeight;
+}
+
+// ===== MESSAGE RENDERING =====
+function appendMessage(role, content, isStreaming = false, existingDiv = null) {
+  let msgDiv = existingDiv;
+
+  if (!msgDiv) {
+    msgDiv = document.createElement("div");
+    msgDiv.className = `message ${role}-message`;
+    messagesDiv.appendChild(msgDiv);
+  }
+
+  if (role === "bot") {
+    msgDiv.innerHTML = renderMarkdown(content || "");
+    // Re-highlight code blocks
+    msgDiv.querySelectorAll("pre code").forEach(block => {
+      hljs.highlightElement(block);
+    });
+  } else {
+    msgDiv.textContent = content;
+  }
+
+  if (!isStreaming) {
+    scrollToBottom();
+  }
+
+  return msgDiv;
+}
+
+// ===== SESSIONS =====
 async function createNewSession() {
-    sessionId = "session-" + Date.now();
-    localStorage.setItem("sessionId", sessionId);
+  const newId = "session-" + Date.now();
 
-    await fetch(`http://localhost:8000/session/${sessionId}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ session_id: sessionId })
+  try {
+    await fetch(`${API_BASE}/session/new`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ session_id: newId })
     });
 
+    activeSessionId = newId;
+    localStorage.setItem("activeSessionId", activeSessionId);
+
     messagesDiv.innerHTML = "";
-    addMessage("bot", "Hello! I'm your AI assistant. How can I help you today?");
+    titleEl.textContent = "New Chat";
 
     await loadSessions();
     highlightActiveSession();
+  } catch (err) {
+    console.error("Create session error:", err);
+  }
 }
 
-/* ----------------------- LOAD SESSIONS ----------------------- */
 async function loadSessions() {
-    const res = await fetch("http://localhost:8000/sessions");
+  try {
+    const res = await fetch(`${API_BASE}/sessions`);
     const data = await res.json();
+    const sessions = data.sessions || [];
 
     sessionList.innerHTML = "";
-    (data.sessions || []).forEach(s => createSidebarItem(s));
+
+    sessions.forEach(session => {
+      createSidebarItem(session);
+    });
 
     highlightActiveSession();
+  } catch (err) {
+    console.error("Load sessions error:", err);
+  }
 }
 
-/* ----------------------- SIDEBAR ITEM ----------------------- */
-function createSidebarItem(s) {
-    const item = document.createElement("div");
-    item.className = "session-item";
-    item.dataset.sessionId = s.session_id;
+function createSidebarItem(session) {
+  const item = document.createElement("div");
+  item.className = "session-item";
+  item.dataset.sessionId = session.session_id;
 
-    const title = s.session_name || s.preview || "New Chat";
+  const title = session.session_name || "New Chat";
 
-    item.innerHTML = `
-        <span class="session-title">${title}</span>
-        <div class="dots-menu">⋮</div>
+  item.innerHTML = `
+    <span class="session-title" title="${title}">${title}</span>
+    <div class="dots-menu">⋮</div>
+    <div class="dropdown-menu">
+      <div class="dropdown-item rename-option">Rename</div>
+      <div class="dropdown-item delete-option delete-option">Delete</div>
+    </div>
+  `;
 
-        <div class="dropdown-menu">
-            <div class="dropdown-item rename-option">Rename</div>
-            <div class="dropdown-item delete-option">Delete</div>
-        </div>
-    `;
+  // Click to switch session
+  item.addEventListener("click", () => {
+    switchSession(session.session_id);
+  });
 
-    item.onclick = () => switchSession(s.session_id);
+  const dots = item.querySelector(".dots-menu");
+  const dropdown = item.querySelector(".dropdown-menu");
 
-    const dots = item.querySelector(".dots-menu");
-    const dropdown = item.querySelector(".dropdown-menu");
+  dots.addEventListener("click", e => {
+    e.stopPropagation();
+    closeAllDropdowns();
+    dropdown.style.display = "block";
+  });
 
-    dots.onclick = (e) => {
-        e.stopPropagation();
-        closeAllDropdowns();
-        dropdown.style.display = "block";
-    };
+  // Rename
+  item.querySelector(".rename-option").addEventListener("click", e => {
+    e.stopPropagation();
+    dropdown.style.display = "none";
+    startInlineRename(item, session.session_id);
+  });
 
-    item.querySelector(".rename-option").onclick = () => {
-        dropdown.style.display = "none";
-        startInlineRename(item, s.session_id);
-    };
+  // Delete
+  item.querySelector(".delete-option").addEventListener("click", async e => {
+    e.stopPropagation();
+    dropdown.style.display = "none";
+    await deleteSession(session.session_id);
+  });
 
-    item.querySelector(".delete-option").onclick = async () => {
-        dropdown.style.display = "none";
-        await deleteSession(s.session_id);
-    };
-
-    sessionList.appendChild(item);
+  sessionList.appendChild(item);
 }
 
-/* ----------------------- CLOSE MENUS ----------------------- */
-document.addEventListener("click", () => closeAllDropdowns());
+// Close dropdowns when clicking outside
+document.addEventListener("click", () => {
+  closeAllDropdowns();
+});
+
 function closeAllDropdowns() {
-    document.querySelectorAll(".dropdown-menu").forEach(menu => {
-        menu.style.display = "none";
-    });
+  document.querySelectorAll(".dropdown-menu").forEach(menu => {
+    menu.style.display = "none";
+  });
 }
 
-/* ----------------------- HIGHLIGHT ACTIVE ----------------------- */
 function highlightActiveSession() {
-    const items = document.querySelectorAll(".session-item");
-    let title = "Chat";
+  const items = document.querySelectorAll(".session-item");
+  let title = "New Chat";
 
-    items.forEach(item => {
-        if (item.dataset.sessionId === sessionId) {
-            item.classList.add("active");
-            title = item.querySelector(".session-title").textContent;
-        } else {
-            item.classList.remove("active");
-        }
-    });
+  items.forEach(item => {
+    if (item.dataset.sessionId === activeSessionId) {
+      item.classList.add("active");
+      const span = item.querySelector(".session-title");
+      if (span) title = span.textContent;
+    } else {
+      item.classList.remove("active");
+    }
+  });
 
-    titleEl.textContent = title;
+  titleEl.textContent = title;
 }
 
-/* ----------------------- SWITCH SESSION ----------------------- */
 async function switchSession(id) {
-    console.log("Switching to:", id);
+  if (!id || id === activeSessionId) return;
 
-    sessionId = id;
-    localStorage.setItem("sessionId", sessionId);
+  activeSessionId = id;
+  localStorage.setItem("activeSessionId", activeSessionId);
 
-    messagesDiv.innerHTML = ""; // instant clear (ChatGPT behavior)
-    highlightActiveSession();
-    await loadChatHistory(id);
+  messagesDiv.innerHTML = "";
+  highlightActiveSession();
+  await loadChatHistory(id);
 }
 
-/* ----------------------- LOAD HISTORY ----------------------- */
-async function loadChatHistory(id) {
-    const res = await fetch(`http://localhost:8000/history/${id}`);
+// ===== HISTORY =====
+async function loadChatHistory(sessionId) {
+  try {
+    const res = await fetch(`${API_BASE}/history/${sessionId}`);
     const data = await res.json();
 
     messagesDiv.innerHTML = "";
-    (data.messages || []).forEach(m => addMessage(m.role, m.content));
+
+    (data.messages || []).forEach(msg => {
+      appendMessage(msg.role === "assistant" ? "bot" : "user", msg.content);
+    });
+
+    scrollToBottom();
+  } catch (err) {
+    console.error("Load history error:", err);
+  }
 }
 
-/* ----------------------- INLINE RENAME ----------------------- */
+// ===== INLINE RENAME =====
 function startInlineRename(item, id) {
-    const span = item.querySelector(".session-title");
-    const oldName = span.textContent;
+  const span = item.querySelector(".session-title");
+  const oldName = span.textContent;
 
-    const input = document.createElement("input");
-    input.className = "session-title-input";
-    input.value = oldName;
+  const input = document.createElement("input");
+  input.className = "session-title-input";
+  input.value = oldName;
 
-    item.replaceChild(input, span);
-    input.focus();
+  input.addEventListener("click", e => e.stopPropagation());
 
-    const save = async () => {
-        const newName = input.value.trim();
-        if (!newName) return cancel();
+  item.replaceChild(input, span);
+  input.focus();
+  input.select();
 
-        await fetch(`http://localhost:8000/session/${id}/rename`, {
-            method: "PUT",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ new_name: newName })
-        });
-
-        await loadSessions();
-    };
-
-    const cancel = () => {
-        item.replaceChild(span, input);
-    };
-
-    input.addEventListener("keydown", (e) => {
-        if (e.key === "Enter") save();
-        if (e.key === "Escape") cancel();
-    });
-
-    input.addEventListener("blur", save);
-}
-
-/* ----------------------- DELETE SESSION ----------------------- */
-async function deleteSession(id) {
-    await fetch(`http://localhost:8000/session/${id}`, {
-        method: "DELETE",
-    });
-
-    // if user deletes the active chat → create a new one
-    if (id === sessionId) {
-        await createNewSession();
+  const save = async () => {
+    const newName = input.value.trim();
+    if (!newName || newName === oldName) {
+      cancel();
+      return;
     }
 
-    await loadSessions();
-    highlightActiveSession();
-}
-
-/* ----------------------- ADD MESSAGE ----------------------- */
-function addMessage(role, text) {
-    const div = document.createElement("div");
-    div.className = `message ${role}-message`;
-    div.innerHTML = text;
-
-    messagesDiv.appendChild(div);
-    messagesDiv.scrollTop = messagesDiv.scrollHeight;
-}
-
-/* ----------------------- SEND MESSAGE ----------------------- */
-sendBtn.onclick = sendMessage;
-inputField.onkeypress = (e) => {
-    if (e.key === "Enter") sendMessage();
-};
-
-async function sendMessage() {
-    const text = inputField.value.trim();
-    if (!text) return;
-
-    addMessage("user", text);
-    inputField.value = "";
-    typingIndicator.style.display = "block";
-
-    const res = await fetch("http://localhost:8000/chat", {
-        method: "POST",
+    try {
+      await fetch(`${API_BASE}/session/${id}/rename`, {
+        method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-            text,
-            session_id: sessionId,
-            conversation_history: [],
-            expertise_level: "beginner"
-        })
+        body: JSON.stringify({ new_name: newName })
+      });
+
+      await loadSessions();
+      highlightActiveSession();
+    } catch (err) {
+      console.error("Rename error:", err);
+      cancel();
+    }
+  };
+
+  const cancel = () => {
+    item.replaceChild(span, input);
+  };
+
+  input.addEventListener("keydown", e => {
+    if (e.key === "Enter") save();
+    if (e.key === "Escape") cancel();
+  });
+
+  input.addEventListener("blur", save);
+}
+
+// ===== DELETE SESSION =====
+async function deleteSession(id) {
+  try {
+    await fetch(`${API_BASE}/session/${id}`, {
+      method: "DELETE"
     });
 
-    const data = await res.json();
-    typingIndicator.style.display = "none";
-
-    addMessage("bot", data.response);
-
-    await loadSessions();
+    if (id === activeSessionId) {
+      await createNewSession();
+    } else {
+      await loadSessions();
+      highlightActiveSession();
+    }
+  } catch (err) {
+    console.error("Delete session error:", err);
+  }
 }
 
-/* ----------------------- NEW CHAT BUTTON ----------------------- */
+// ===== INPUT HANDLING =====
+function autoResizeTextarea() {
+  inputField.style.height = "auto";
+  inputField.style.height = inputField.scrollHeight + "px";
+}
+
+inputField.addEventListener("input", autoResizeTextarea);
+
+// Enter to send, Shift+Enter new line
+inputField.addEventListener("keydown", e => {
+  if (e.key === "Enter" && !e.shiftKey) {
+    e.preventDefault();
+    sendMessage();
+  }
+});
+
+sendBtn.addEventListener("click", sendMessage);
+
+// ===== SEND MESSAGE (STREAMING) =====
+async function sendMessage() {
+  const text = inputField.value.trim();
+  if (!text || !activeSessionId) return;
+
+  // add user message
+  appendMessage("user", text);
+  inputField.value = "";
+  autoResizeTextarea();
+
+  typingIndicator.style.display = "flex";
+  scrollToBottom();
+
+  // Create an empty bot message div for streaming
+  let botDiv = appendMessage("bot", "", true);
+
+  try {
+    const res = await fetch(`${API_BASE}/chat`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        text,
+        session_id: activeSessionId
+      })
+    });
+
+    if (!res.body) {
+      console.error("Streaming not supported");
+      const data = await res.text();
+      botDiv = appendMessage("bot", data);
+      typingIndicator.style.display = "none";
+      await loadSessions();
+      return;
+    }
+
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder("utf-8");
+    let botText = "";
+
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) break;
+
+      const chunk = decoder.decode(value, { stream: true });
+      botText += chunk;
+
+      appendMessage("bot", botText, true, botDiv);
+      scrollToBottom();
+    }
+
+    typingIndicator.style.display = "none";
+    appendMessage("bot", botText, false, botDiv);
+
+    // Refresh sessions list to update preview/title
+    await loadSessions();
+  } catch (err) {
+    console.error("Chat error:", err);
+    typingIndicator.style.display = "none";
+  }
+}
+
+// ===== NEW CHAT BUTTON =====
 newChatBtn.addEventListener("click", async () => {
-    await createNewSession();
+  await createNewSession();
 });
