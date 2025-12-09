@@ -1,68 +1,850 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>AI Tutor - ChatGPT Clone</title>
-  <link rel="stylesheet" href="style.css" />
+  <title>AI Tutor</title>
 
-  <!-- Markdown parser -->
-  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
-  <!-- HTML sanitizer -->
-  <script src="https://cdn.jsdelivr.net/npm/dompurify@3.1.6/dist/purify.min.js"></script>
-  <!-- Code highlighting -->
-  <link
-    rel="stylesheet"
-    href="https://cdn.jsdelivr.net/npm/highlight.js@11.9.0/styles/github-dark.min.css"
-  />
-  <script src="https://cdn.jsdelivr.net/npm/highlight.js@11.9.0/lib/common.min.js"></script>
+  <style>
+    /* GLOBAL */
+    html, body {
+      height: 100%;
+      margin: 0;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: #f5f5f7;
+      color: #111827;
+    }
+
+    .screen {
+      display: none;
+      height: 100%;
+      width: 100%;
+    }
+    .screen.active {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+    }
+
+    .center-box {
+      background: white;
+      padding: 28px;
+      border-radius: 12px;
+      width: 350px;
+      text-align: center;
+      box-shadow: 0 0 12px rgba(0,0,0,0.1);
+    }
+
+    input {
+      width: 100%;
+      padding: 12px;
+      margin-top: 10px;
+      border: 1px solid #ccc;
+      border-radius: 8px;
+      font-size: 14px;
+      background: white;
+      color: #111827;
+    }
+
+    input::placeholder {
+      color: #6b7280;
+    }
+
+    button {
+      padding: 10px 16px;
+      background: #2563eb;
+      border: none;
+      border-radius: 8px;
+      color: white;
+      font-size: 14px;
+      cursor: pointer;
+    }
+
+    button:hover {
+      background: #1d4ed8;
+    }
+
+    .error {
+      color: #dc2626;
+      margin-top: 10px;
+      font-size: 14px;
+    }
+
+    /* CHAT LAYOUT */
+    #chat-screen {
+      display: none;
+      height: 100%;
+    }
+    #chat-screen.active {
+      display: flex;
+      height: 100%;
+    }
+
+    /* SIDEBAR */
+    #sidebar {
+      width: 260px;
+      background: white;
+      border-right: 1px solid #ddd;
+      display: flex;
+      flex-direction: column;
+      padding: 12px;
+    }
+
+    #sidebar > button {
+      width: 100%;
+      margin-bottom: 8px;
+    }
+
+    #session-list {
+      flex: 1;
+      overflow-y: auto;
+      margin-top: 4px;
+    }
+
+    .session-item {
+      padding: 10px;
+      border-radius: 8px;
+      cursor: pointer;
+      margin-bottom: 4px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      position: relative;
+    }
+
+    .session-item:hover {
+      background: #eee;
+    }
+
+    .session-item.active {
+      background: #dbeafe;
+    }
+
+    .session-dots {
+      cursor: pointer;
+      padding: 4px;
+      font-size: 18px;
+      color: #6b7280;
+    }
+
+    .session-dots:hover {
+      color: #111827;
+    }
+
+    /* DROPDOWN */
+    .dropdown {
+      position: absolute;
+      top: 34px;
+      right: 10px;
+      background: white;
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      box-shadow: 0 3px 10px rgba(0,0,0,0.15);
+      width: 120px;
+      display: none;
+      z-index: 999;
+    }
+
+    .dropdown-item {
+      padding: 8px 10px;
+      cursor: pointer;
+      font-size: 14px;
+    }
+
+    .dropdown-item:hover {
+      background: #f3f3f3;
+    }
+
+    .dropdown-delete {
+      color: #dc2626;
+    }
+
+    /* MAIN CHAT */
+    #chat-area {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      background: white;
+    }
+
+    .chat-header {
+      padding: 16px;
+      border-bottom: 1px solid #ddd;
+      font-weight: 600;
+    }
+
+    .chat-body {
+      flex: 1;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+
+    #messages {
+      flex: 1;
+      overflow-y: auto;
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      background: #f9fafb;
+    }
+
+    .message {
+      padding: 12px 16px;
+      max-width: 70%;
+      border-radius: 10px;
+      line-height: 1.4;
+      font-size: 15px;
+    }
+
+    .message.user {
+      background: #dbeafe;
+      margin-left: auto;
+    }
+
+    .message.bot {
+      background: #f3f4f6;
+      margin-right: auto;
+    }
+
+    .chat-input-bar {
+      padding: 12px;
+      border-top: 1px solid #ddd;
+      background: white;
+      display: flex;
+      gap: 10px;
+      align-items: center;
+    }
+
+    #user-input {
+      flex: 1;
+      min-height: 42px;
+      max-height: 150px;
+      padding: 10px;
+      border: 1px solid #ccc;
+      border-radius: 8px;
+      resize: none;
+      font-size: 14px;
+      overflow-y: auto;
+      background: white;
+      color: #111827;
+    }
+
+    #user-input::placeholder {
+      color: #6b7280;
+    }
+
+    #send-btn {
+      padding: 10px 18px;
+      background: #2563eb;
+      white-space: nowrap;
+      border-radius: 8px;
+      color: white;
+      cursor: pointer;
+    }
+
+    /* ===================== DARK MODE ===================== */
+    body.dark {
+      background: #020617;
+      color: #e5e7eb;
+    }
+
+    body.dark .center-box {
+      background: #020617;
+      color: #e5e7eb;
+      box-shadow: 0 0 12px rgba(0,0,0,0.6);
+      border: 1px solid #1f2937;
+    }
+
+    body.dark input {
+      background: #020617;
+      color: #e5e7eb;
+      border-color: #374151;
+    }
+
+    body.dark input::placeholder {
+      color: #6b7280;
+    }
+
+    body.dark #chat-screen {
+      background: #020617;
+    }
+
+    body.dark #sidebar {
+      background: #020617;
+      border-right-color: #111827;
+    }
+
+    body.dark .session-item:hover {
+      background: #111827;
+    }
+
+    body.dark .session-item.active {
+      background: #1d4ed8;
+    }
+
+    body.dark .session-dots {
+      color: #9ca3af;
+    }
+
+    body.dark .session-dots:hover {
+      color: #e5e7eb;
+    }
+
+    body.dark #chat-area {
+      background: #020617;
+    }
+
+    body.dark .chat-header {
+      border-bottom-color: #111827;
+    }
+
+    body.dark #messages {
+      background: #020617;
+    }
+
+    body.dark .message.user {
+      background: #1d4ed8;
+      color: #e5e7eb;
+    }
+
+    body.dark .message.bot {
+      background: #111827;
+      color: #e5e7eb;
+    }
+
+    body.dark .chat-input-bar {
+      background: #020617;
+      border-top-color: #111827;
+    }
+
+    body.dark #user-input {
+      background: #020617;
+      border-color: #374151;
+      color: #e5e7eb;
+    }
+
+    body.dark #user-input::placeholder {
+      color: #6b7280;
+    }
+
+    body.dark .dropdown {
+      background: #020617;
+      border-color: #374151;
+      box-shadow: 0 3px 15px rgba(0,0,0,0.6);
+    }
+
+    body.dark .dropdown-item {
+      color: #e5e7eb;
+    }
+
+    body.dark .dropdown-item:hover {
+      background: #111827;
+    }
+  </style>
 </head>
 
 <body>
-  <!-- SIDEBAR -->
-  <aside id="sidebar">
-    <div class="sidebar-top">
-      <div class="app-title">AI Tutor</div>
-      <button id="new-chat-btn" class="btn btn-primary">+ New Chat</button>
-    </div>
 
-    <div id="session-list" class="session-list">
-      <!-- Sessions rendered by JS -->
-    </div>
+<!-- ========== WELCOME ========== -->
+<div id="welcome-screen" class="screen active">
+  <div class="center-box">
+    <h2>Welcome</h2>
+    <button id="go-login">Login</button><br><br>
+    <button id="go-signup">Sign Up</button>
+  </div>
+</div>
+
+<!-- ========== LOGIN ========== -->
+<div id="login-screen" class="screen">
+  <div class="center-box">
+    <h2>Login</h2>
+    <input id="login-email" type="email" placeholder="Email">
+    <input id="login-pass" type="password" placeholder="Password">
+    <button id="login-btn">Login</button>
+    <p id="login-error" class="error"></p>
+  </div>
+</div>
+
+<!-- ========== SIGNUP ========== -->
+<div id="signup-screen" class="screen">
+  <div class="center-box">
+    <h2>Sign Up</h2>
+    <input id="signup-name" type="text" placeholder="Full Name">
+    <input id="signup-email" type="email" placeholder="Email">
+    <input id="signup-pass" type="password" placeholder="Password">
+    <button id="signup-btn">Create Account</button>
+    <p id="signup-error" class="error"></p>
+  </div>
+</div>
+
+<!-- ========== CHAT ========== -->
+<div id="chat-screen">
+  <aside id="sidebar">
+    <button id="new-chat-btn">+ New Chat</button>
+    <button id="theme-toggle-btn">Dark mode</button>
+    <div id="session-list"></div>
+    <button id="logout-btn" style="margin-top:10px;">Logout</button>
   </aside>
 
-  <!-- MAIN AREA -->
-  <main id="main">
-    <!-- Top bar -->
-    <header id="topbar">
-      <h2 id="active-session-title">New Chat</h2>
-    </header>
+  <main id="chat-area">
+    <div class="chat-header" id="chat-username">AI Tutor</div>
+    <div class="chat-body">
+      <div id="messages"></div>
+    </div>
 
-    <!-- Chat area -->
-    <section id="chat-container">
-      <div id="messages" class="messages"></div>
-
-      <div id="typing-indicator" class="typing-indicator">
-        <span class="typing-dot"></span>
-        <span class="typing-dot"></span>
-        <span class="typing-dot"></span>
-      </div>
-    </section>
-
-    <!-- Input bar -->
-    <footer id="input-bar">
-      <div class="input-inner">
-        <textarea
-          id="user-input"
-          rows="1"
-          placeholder="Type your message..."
-        ></textarea>
-        <button id="send-btn" class="btn btn-send">Send</button>
-      </div>
-      <div class="input-hint">Press Enter to send • Shift + Enter for new line</div>
+    <footer class="chat-input-bar">
+      <textarea id="user-input" placeholder="Type your message..."></textarea>
+      <button id="send-btn">Send</button>
     </footer>
   </main>
+</div>
 
-  <script src="script.js"></script>
+<script>
+/* CONFIG */
+const API_BASE = "http://localhost:8000";
+
+const TOKEN_KEY   = "ai_tutor_token";
+const USER_KEY    = "ai_tutor_user";
+const SESSION_KEY = "ai_tutor_session_id";
+const THEME_KEY   = "ai_tutor_theme";
+
+/* STORAGE HELPERS */
+function setToken(v){ localStorage.setItem(TOKEN_KEY, v); }
+function getToken(){ return localStorage.getItem(TOKEN_KEY); }
+function setUser(u){ localStorage.setItem(USER_KEY, JSON.stringify(u)); }
+function getUser(){ return JSON.parse(localStorage.getItem(USER_KEY) || "null"); }
+function clearAuth(){
+  localStorage.removeItem(TOKEN_KEY);
+  localStorage.removeItem(USER_KEY);
+}
+
+function setSessionId(v){ localStorage.setItem(SESSION_KEY, v); }
+function getSessionId(){ return localStorage.getItem(SESSION_KEY); }
+function generateSessionId(){ return "sess-" + Date.now(); }
+
+function authHeaders(){
+  const token = getToken();
+  return {
+    "Content-Type": "application/json",
+    "Authorization": "Bearer " + token
+  };
+}
+
+/* ELEMENTS */
+const welcomeScreen = document.getElementById("welcome-screen");
+const loginScreen   = document.getElementById("login-screen");
+const signupScreen  = document.getElementById("signup-screen");
+const chatScreen    = document.getElementById("chat-screen");
+
+const goLoginBtn  = document.getElementById("go-login");
+const goSignupBtn = document.getElementById("go-signup");
+
+const loginEmail = document.getElementById("login-email");
+const loginPass  = document.getElementById("login-pass");
+const loginBtn   = document.getElementById("login-btn");
+const loginErr   = document.getElementById("login-error");
+
+const signupName  = document.getElementById("signup-name");
+const signupEmail = document.getElementById("signup-email");
+const signupPass  = document.getElementById("signup-pass");
+const signupBtn   = document.getElementById("signup-btn");
+const signupErr   = document.getElementById("signup-error");
+
+const logoutBtn      = document.getElementById("logout-btn");
+const newChatBtn     = document.getElementById("new-chat-btn");
+const themeToggleBtn = document.getElementById("theme-toggle-btn");
+
+const sessionListEl = document.getElementById("session-list");
+const chatUsername  = document.getElementById("chat-username");
+const messagesDiv   = document.getElementById("messages");
+const userInput     = document.getElementById("user-input");
+const sendBtn       = document.getElementById("send-btn");
+
+let activeSessionId = null;
+
+/* SCREENS */
+function showScreen(which){
+  [welcomeScreen, loginScreen, signupScreen, chatScreen]
+    .forEach(s => s.classList.remove("active"));
+
+  if(which==="welcome") welcomeScreen.classList.add("active");
+  if(which==="login")   loginScreen.classList.add("active");
+  if(which==="signup")  signupScreen.classList.add("active");
+  if(which==="chat")    chatScreen.classList.add("active");
+}
+
+goLoginBtn.onclick  = ()=>showScreen("login");
+goSignupBtn.onclick = ()=>showScreen("signup");
+
+/* SIGNUP */
+signupBtn.onclick = async()=>{
+  signupErr.textContent = "";
+
+  const name  = signupName.value.trim();
+  const email = signupEmail.value.trim();
+  const pass  = signupPass.value.trim();
+
+  if(!name || !email || !pass){
+    signupErr.textContent = "Fill all fields";
+    return;
+  }
+
+  try {
+    const res = await fetch(`${API_BASE}/auth/signup`, {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({name, email, password: pass})
+    });
+
+    const data = await res.json();
+    if (!res.ok) {
+      signupErr.textContent = data.detail || "Signup failed";
+      return;
+    }
+
+    setToken(data.access_token);
+    setUser(data.user);
+    await init();
+
+  } catch (error) {
+    console.error("Signup error:", error);
+    signupErr.textContent = "Signup error";
+  }
+};
+
+/* LOGIN */
+loginBtn.onclick = async()=>{
+  loginErr.textContent = "";
+
+  const email = loginEmail.value.trim();
+  const pass  = loginPass.value.trim();
+
+  if(!email || !pass){
+    loginErr.textContent = "Fill all fields";
+    return;
+  }
+
+  const res = await fetch(`${API_BASE}/auth/login`,{
+    method:"POST",
+    headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({email, password:pass})
+  });
+
+  const data = await res.json();
+  if(!res.ok){
+    loginErr.textContent = data.detail || "Login failed";
+    return;
+  }
+
+  setToken(data.access_token);
+  setUser(data.user);
+
+  await init();
+};
+
+/* SESSIONS */
+async function fetchSessions(){
+  const res = await fetch(`${API_BASE}/sessions`,{
+    method:"GET",
+    headers: authHeaders()
+  });
+  const data = await res.json();
+  return data.sessions || [];
+}
+
+async function ensureSession(id){
+  const res = await fetch(`${API_BASE}/sessions/new`, {
+    method: "POST",
+    headers: authHeaders(),
+    body: JSON.stringify({
+      session_id: id,
+      session_name: "New Chat"
+    })
+  });
+  return res.json();
+}
+
+/* SAFE HISTORY LOADER */
+async function loadHistory(id){
+  const res = await fetch(`${API_BASE}/sessions/history/${id}`,{
+    method:"GET",
+    headers: authHeaders()
+  });
+
+  if (!res.ok) {
+    messagesDiv.innerHTML = "";
+    return;
+  }
+
+  const data = await res.json();
+
+  if (!data.messages) {
+    messagesDiv.innerHTML = "";
+    return;
+  }
+
+  messagesDiv.innerHTML="";
+  for(const msg of data.messages){
+    addMessage(msg.role==="assistant" ? "bot" : "user", msg.content);
+  }
+}
+
+/* CLOSE ALL DROPDOWNS */
+function closeAllDropdowns(){
+  document.querySelectorAll(".dropdown").forEach(d=> d.style.display="none");
+}
+document.addEventListener("click", closeAllDropdowns);
+
+/* RENDER SESSION LIST WITH DOTS + DROPDOWN */
+function renderSessions(list){
+  sessionListEl.innerHTML="";
+
+  list.forEach(sess=>{
+    const item = document.createElement("div");
+    item.className="session-item";
+    item.dataset.id = sess.session_id;
+
+    const label = document.createElement("span");
+    label.textContent = sess.session_name || "New Chat";
+
+    const dots = document.createElement("span");
+    dots.className = "session-dots";
+    dots.textContent = "⋮";
+
+    const dropdown = document.createElement("div");
+    dropdown.className = "dropdown";
+
+    const renameItem = document.createElement("div");
+    renameItem.className = "dropdown-item";
+    renameItem.textContent = "Rename";
+
+    const deleteItem = document.createElement("div");
+    deleteItem.className = "dropdown-item dropdown-delete";
+    deleteItem.textContent = "Delete";
+
+    dropdown.appendChild(renameItem);
+    dropdown.appendChild(deleteItem);
+
+    item.appendChild(label);
+    item.appendChild(dots);
+    item.appendChild(dropdown);
+
+    sessionListEl.appendChild(item);
+
+    // Click whole item -> switch session
+    item.addEventListener("click", async (e)=>{
+      if(e.target === dots) return; // dot has own handler
+      await switchSession(sess.session_id);
+    });
+
+    // Dots -> open dropdown
+    dots.addEventListener("click", (e)=>{
+      e.stopPropagation();
+      closeAllDropdowns();
+      dropdown.style.display = "block";
+    });
+
+    // RENAME
+    renameItem.onclick = async (e)=>{
+      e.stopPropagation();
+      dropdown.style.display = "none";
+      const newName = prompt("Rename chat:", sess.session_name || "New Chat");
+      if(!newName) return;
+
+      await fetch(`${API_BASE}/sessions/${sess.session_id}/rename`,{
+        method:"PUT",
+        headers: authHeaders(),
+        body: JSON.stringify({ new_name:newName })
+      });
+
+      renderSessions(await fetchSessions());
+    };
+
+    // DELETE
+    deleteItem.onclick = async (e)=>{
+      e.stopPropagation();
+      dropdown.style.display = "none";
+      if(!confirm("Delete this chat?")) return;
+
+      await fetch(`${API_BASE}/sessions/${sess.session_id}`,{
+        method:"DELETE",
+        headers: authHeaders()
+      });
+
+      const updated = await fetchSessions();
+      if(updated.length){
+        activeSessionId = updated[0].session_id;
+        setSessionId(activeSessionId);
+        await ensureSession(activeSessionId);
+        await loadHistory(activeSessionId);
+      } else {
+        activeSessionId = null;
+        localStorage.removeItem(SESSION_KEY);
+        messagesDiv.innerHTML="";
+      }
+      renderSessions(updated);
+    };
+  });
+
+  highlightActiveSession();
+}
+
+function highlightActiveSession(){
+  [...sessionListEl.children].forEach(div=>{
+    div.classList.toggle("active", div.dataset.id === activeSessionId);
+  });
+}
+
+/* ENSURE SESSION BEFORE SWITCHING */
+async function switchSession(id){
+  activeSessionId = id;
+  setSessionId(id);
+
+  await ensureSession(id);
+  await loadHistory(id);
+
+  highlightActiveSession();
+  showScreen("chat");
+}
+
+/* AUTO-RENAME LIKE CHATGPT */
+async function autoRenameSession(sessionId, text){
+  const sessions = await fetchSessions();
+  const s = sessions.find(x => x.session_id === sessionId);
+  if(!s) return;
+
+  if(!s.session_name || s.session_name === "New Chat"){
+    const trimmed = text.trim();
+    if(!trimmed) return;
+    const newName = trimmed.length>40 ? trimmed.slice(0,40)+"..." : trimmed;
+
+    await fetch(`${API_BASE}/sessions/${sessionId}/rename`,{
+      method:"PUT",
+      headers: authHeaders(),
+      body: JSON.stringify({ new_name:newName })
+    });
+
+    renderSessions(await fetchSessions());
+  }
+}
+
+/* CHAT */
+function addMessage(role,text){
+  const div = document.createElement("div");
+  div.className = "message " + role;
+  div.textContent = text;
+  messagesDiv.appendChild(div);
+  messagesDiv.scrollTop = messagesDiv.scrollHeight;
+}
+
+sendBtn.onclick = sendMessage;
+userInput.addEventListener("keydown",e=>{
+  if(e.key==="Enter" && !e.shiftKey){
+    e.preventDefault();
+    sendMessage();
+  }
+});
+
+async function sendMessage(){
+  const text = userInput.value.trim();
+  if(!text) return;
+
+  // auto-rename on first user message
+  await autoRenameSession(activeSessionId, text);
+
+  addMessage("user", text);
+  userInput.value = "";
+
+  const res = await fetch(`${API_BASE}/chat`,{
+    method:"POST",
+    headers: authHeaders(),
+    body: JSON.stringify({
+      text,
+      session_id: activeSessionId,
+      expertise_level: "beginner"
+    })
+  });
+
+  const data = await res.json();
+  addMessage("bot", data.response || "(empty)");
+}
+
+/* NEW CHAT */
+newChatBtn.onclick = async()=>{
+  const id = generateSessionId();
+  await ensureSession(id);
+  activeSessionId = id;
+  setSessionId(id);
+
+  renderSessions(await fetchSessions());
+  messagesDiv.innerHTML="";
+  showScreen("chat");
+};
+
+/* LOGOUT */
+logoutBtn.onclick = ()=>{
+  clearAuth();
+  showScreen("welcome");
+};
+
+/* THEME */
+function applyTheme(mode){
+  if(mode==="dark"){
+    document.body.classList.add("dark");
+    themeToggleBtn.textContent="Light Mode";
+  } else {
+    document.body.classList.remove("dark");
+    themeToggleBtn.textContent="Dark Mode";
+  }
+}
+themeToggleBtn.onclick = ()=>{
+  const current = localStorage.getItem(THEME_KEY)==="dark" ? "light" : "dark";
+  localStorage.setItem(THEME_KEY,current);
+  applyTheme(current);
+};
+
+/* INIT */
+async function init() {
+  const user = getUser();
+  if (!user) {
+    clearAuth();
+    showScreen("welcome");
+    return;
+  }
+
+  chatUsername.textContent = "Logged in as " + (user.name || user.email);
+
+  let sid = getSessionId();
+  const sessions = await fetchSessions();
+
+  if (!sid) {
+    sid = sessions[0]?.session_id || generateSessionId();
+    await ensureSession(sid);
+    setSessionId(sid);
+  }
+
+  activeSessionId = sid;
+
+  await ensureSession(sid);
+  renderSessions(await fetchSessions());
+  await loadHistory(sid);
+
+  showScreen("chat");
+}
+
+/* ON LOAD */
+window.addEventListener("load", async()=>{
+  applyTheme(localStorage.getItem(THEME_KEY) || "light");
+
+  if(getToken() && getUser()){
+    await init();
+  } else {
+    showScreen("welcome");
+  }
+});
+</script>
+
 </body>
 </html>
